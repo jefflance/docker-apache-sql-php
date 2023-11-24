@@ -1,0 +1,141 @@
+---
+version: '3.8'
+
+networks:
+  mynetwork:
+    name: "${APP_NAME}-net"
+
+services:
+  # apache:
+  #   container_name: "${APP_NAME}-apache"
+  #   labels:
+  #     local.project: "${APP_NAME}"
+  #   build:
+  #     context: .
+  #     dockerfile: apache/Dockerfile
+  #   restart: always
+  #   ports:
+  #     - "${HTTPD_LISTEN_PORT}:80"
+  #   volumes:
+  #     - "${APP_FOLDER}:/usr/local/apache2/htdocs"
+  #     - ./apache/vhosts:/etc/apache2/sites-enabled
+  #     - ./tmp:/tmp
+  #     - ./apache/logs:/var/log/httpd:cached
+  #   depends_on:
+  #     - php
+  #   networks:
+  #     - mynetwork
+
+  php:
+    container_name: "${APP_NAME}-php"
+    labels:
+      local.project: "${APP_NAME}"
+    build:
+      context: .
+      dockerfile: php/Dockerfile
+    restart: always
+    ports:
+      - "${HTTPD_LISTEN_PORT}:80"
+    volumes:
+      - "${APP_FOLDER}:/var/www/html"
+      - ./apache/vhosts:/etc/apache2/sites-enabled
+      - ./apache/logs:/var/log/apache2:cached
+      - ./tmp:/tmp
+    networks:
+      - mynetwork
+
+  mariadb:
+    container_name: "${APP_NAME}-mariadb"
+    labels:
+      local.project: "${APP_NAME}"
+    image: mariadb
+    restart: always
+    ports:
+      - "${MARIADB_PORT}:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./mariadb:/etc/mysql
+    environment:
+      MARIADB_ROOT_PASSWORD: "${MARIADB_ROOT_PASSWORD}"
+      MARIADB_USER: "${MARIADB_USER}"
+      MARIADB_PASSWORD: "${MARIADB_USER_PASSWORD}"
+      MARIADB_DATABASE: "${MARIADB_DATABASE}"
+    healthcheck:
+      test: mysqladmin ping -h 127.0.0.1 -u root --password=$${MARIADB_ROOT_PASSWORD}
+      interval: 5s
+      retries: 5
+    networks:
+      - mynetwork
+    profiles:
+      - mariadb
+
+  mysql:
+    container_name: "${APP_NAME}-mysql"
+    labels:
+      local.project: "${APP_NAME}"
+    image: mysql
+    restart: always
+    ports:
+      - "${MYSQLDB_PORT}:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./mysql:/etc/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQLDB_ROOT_PASSWORD}"
+      MYSQL_USER: "${MYSQLDB_USER}"
+      MYSQL_PASSWORD: "${MYSQLDB_USER_PASSWORD}"
+      MYSQL_DATABASE: "${MYSQLDB_DATABASE}"
+    healthcheck:
+      test: mysqladmin ping -h 127.0.0.1 -u root --password=$${MYSQLDB_ROOT_PASSWORD}
+      interval: 5s
+      retries: 5
+    networks:
+      - mynetwork
+    profiles:
+      - mysql
+
+  pgsql:
+    container_name: "${APP_NAME}-pgsql"
+    labels:
+      local.project: "${APP_NAME}"
+    image: postgres
+    restart: always
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./postgresql:/etc/postgresql
+    environment:
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_DB: "${POSTGRES_DATABASE}"
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    healthcheck:
+      test: pg_isready -h 127.0.0.1 -u $${POSTGRES_USER}
+      interval: 5s
+      retries: 5
+    networks:
+      - mynetwork
+    profiles:
+      - pgsql
+
+  adminer:
+    container_name: "${APP_NAME}-adminer"
+    labels:
+      local.project: "${APP_NAME}"
+    image: adminer
+    restart: always
+    environment:
+      ADMINER_DESIGN: 'dracula'
+      ADMINER_PLUGINS: 'tables-filter tinymce'
+    ports:
+      - "${ADMINER_PORT}:8080"
+    depends_on:
+      # - apache
+      - php
+    networks:
+      - mynetwork
+    profiles: ['mariadb', 'mysql', 'pgsql']
+
+volumes:
+  db_data:
